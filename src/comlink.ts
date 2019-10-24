@@ -11,6 +11,26 @@
  * limitations under the License.
  */
 
+/**
+ * @fileoverview Same as Comlink, but may have bugs
+ * Goal is to use less of ES6+ features so that I can use it on IE with less polyfills
+ *
+ * Previously to have Comlink running in IE11, you need polyfill for
+ * - Promise
+ * - Proxy
+ * - Symbol
+ * - WeakMap
+ * - WeakSet
+ * - Map
+ *
+ * I believe we can reduce it to
+ * - Promise
+ * - Proxy
+ * - WeakMap
+ *
+ * Is it worth it? Idk...
+ */
+
 import {
   Endpoint,
   EventSource,
@@ -22,10 +42,10 @@ import {
 } from "./protocol.js";
 export { Endpoint };
 
-export const proxyMarker = Symbol("Comlink.proxy");
-export const createEndpoint = Symbol("Comlink.endpoint");
-export const releaseProxy = Symbol("Comlink.releaseProxy");
-const throwSet = new WeakSet();
+export const proxyMarker = "@@Comlink.proxy";
+export const createEndpoint = "@@Comlink.endpoint";
+export const releaseProxy = "@@Comlink.releaseProxy";
+const throwSet = new WeakMap();
 
 // prettier-ignore
 type Promisify<T> = T extends { [proxyMarker]: boolean }
@@ -54,47 +74,43 @@ export interface TransferHandler {
   deserialize(obj: any): any;
 }
 
-export const transferHandlers = new Map<string, TransferHandler>([
-  [
-    "proxy",
-    {
-      canHandle: obj => obj && obj[proxyMarker],
-      serialize(obj) {
-        const { port1, port2 } = new MessageChannel();
-        expose(obj, port1);
-        return [port2, [port2]];
-      },
-      deserialize: (port: MessagePort) => {
-        port.start();
-        return wrap(port);
-      }
+export const transferHandlers: {
+  [name: string]: TransferHandler;
+} = {
+  proxy: {
+    canHandle: obj => obj && obj[proxyMarker],
+    serialize(obj) {
+      const { port1, port2 } = new MessageChannel();
+      expose(obj, port1);
+      return [port2, [port2]];
+    },
+    deserialize: (port: MessagePort) => {
+      port.start();
+      return wrap(port);
     }
-  ],
-  [
-    "throw",
-    {
-      canHandle: obj => throwSet.has(obj),
-      serialize(obj) {
-        const isError = obj instanceof Error;
-        let serialized = obj;
-        if (isError) {
-          serialized = {
-            isError,
-            message: obj.message,
-            stack: obj.stack
-          };
-        }
-        return [serialized, []];
-      },
-      deserialize(obj) {
-        if ((obj as any).isError) {
-          throw Object.assign(new Error(), obj);
-        }
-        throw obj;
+  },
+  throw: {
+    canHandle: obj => throwSet.has(obj),
+    serialize(obj) {
+      const isError = obj instanceof Error;
+      let serialized = obj;
+      if (isError) {
+        serialized = {
+          isError,
+          message: obj.message,
+          stack: obj.stack
+        };
       }
+      return [serialized, []];
+    },
+    deserialize(obj) {
+      if ((obj as any).isError) {
+        throw Object.assign(new Error(), obj);
+      }
+      throw obj;
     }
-  ]
-]);
+  }
+};
 
 export function expose(obj: any, ep: Endpoint = self as any) {
   ep.addEventListener("message", function callback(ev: MessageEvent) {
@@ -148,7 +164,10 @@ export function expose(obj: any, ep: Endpoint = self as any) {
       }
     } catch (e) {
       returnValue = e;
-      throwSet.add(e);
+
+      if (throwSet.has(e)) {
+        throwSet.set(e, 1);
+      }
     }
     Promise.resolve(returnValue).then(returnValue => {
       const [wireValue, transferables] = toWireValue(returnValue);
@@ -301,17 +320,21 @@ export function windowEndpoint(
 }
 
 function toWireValue(value: any): [WireValue, Transferable[]] {
-  for (const [name, handler] of transferHandlers) {
-    if (handler.canHandle(value)) {
-      const [serializedValue, transferables] = handler.serialize(value);
-      return [
-        {
-          type: WireValueType.HANDLER,
-          name,
-          value: serializedValue
-        },
-        transferables
-      ];
+  for (const key in transferHandlers) {
+    if (transferHandlers.hasOwnProperty(key)) {
+      const name = key,
+        handler = transferHandlers[key];
+      if (handler.canHandle(value)) {
+        const [serializedValue, transferables] = handler.serialize(value);
+        return [
+          {
+            type: WireValueType.HANDLER,
+            name,
+            value: serializedValue
+          },
+          transferables
+        ];
+      }
     }
   }
   return [
@@ -326,7 +349,7 @@ function toWireValue(value: any): [WireValue, Transferable[]] {
 function fromWireValue(value: WireValue): any {
   switch (value.type) {
     case WireValueType.HANDLER:
-      return transferHandlers.get(value.name)!.deserialize(value.value);
+      return transferHandlers[value.name].deserialize(value.value);
     case WireValueType.RAW:
       return value.value;
   }

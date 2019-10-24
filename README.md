@@ -136,7 +136,7 @@ While this won’t throw immediately, `onClick` will never actually be called. T
 Each function parameter and return value is given to _all_ registered transfer handlers. If one of the event handler signals that it can process the value by returning `true` from `canHandle()`, it is now responsible for serializing the value to structured cloneable data and for deserializing the value. A transfer handler has be set up on _both sides_ of the message channel. Here’s an example transfer handler for events:
 
 ```js
-Comlink.transferHandlers.set("EVENT", {
+Comlink.transferHandlers["EVENT"] = {
   canHandle: obj => obj instanceof Event,
   serialize: ev => {
     return [{
@@ -147,7 +147,7 @@ Comlink.transferHandlers.set("EVENT", {
     }, []];
   },
   deserialize: obj => obj,
-});
+};
 ```
 
 Note that this particular transfer handler won’t create an actual `Event`, but just an object that has the `event.target.id` and `event.target.classList` property. Often, this enough. If not, the transfer handler can be easily augmented to provide all necessary data.

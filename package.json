@@ -9,10 +9,10 @@
     "build": "rollup -c",
     "test:unit": "karma start",
     "test:types": "tsc -t esnext -m esnext --lib esnext,dom --moduleResolution node --noEmit tests/type-checks.ts",
-    "test": "npm run fmt_test && npm run build && npm run test:types && npm run test:unit",
-    "fmt": "prettier --write ./*.{mjs,js,ts,md,json,html} ./{src,docs,tests}/**/*.{mjs,js,ts,md,json,html}",
-    "fmt_test": "test $(prettier -l ./*.{mjs,js,ts,md,json,html} ./{src,docs,tests}/**/*.{mjs,js,ts,md,json,html} | wc -l) -eq 0",
-    "watchtest": "CHROME_ONLY=1 karma start --no-single-run"
+    "test": "npm run fmt && npm run build && npm run test:types && npm run test:unit",
+    "fmt": "cross-env prettier --write ./*.{mjs,js,ts,md,json,html} ./{src,docs,tests}/**/*.{mjs,js,ts,md,json,html}",
+    "fmt_test": "cross-env test $(prettier -l ./*.{mjs,js,ts,md,json,html} ./{src,docs,tests}/**/*.{mjs,js,ts,md,json,html} | wc -l) -eq 0",
+    "watchtest": "cross-env CHROME_ONLY=1 karma start --no-single-run"
   },
   "husky": {
     "hooks": {
@@ -31,6 +31,7 @@
   "devDependencies": {
     "chai": "4.2.0",
     "conditional-type-checks": "1.0.1",
+    "cross-env": "^6.0.3",
     "husky": "3.0.7",
     "karma": "4.3.0",
     "karma-chai": "0.1.0",

@@ -453,7 +453,7 @@ describe("Comlink in the same realm", function() {
   });
 
   it("lets users define transfer handlers", function(done) {
-    Comlink.transferHandlers.set("event", {
+    Comlink.transferHandlers["event"] = {
       canHandle(obj) {
         return obj instanceof Event;
       },
@@ -463,7 +463,7 @@ describe("Comlink in the same realm", function() {
       deserialize(data) {
         return new MessageEvent("message", { data });
       }
-    });
+    };
 
     Comlink.expose(ev => {
       expect(ev).to.be.an.instanceOf(Event);
